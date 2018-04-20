@@ -1,0 +1,36 @@
+{
+  "name": "Respire",
+  "keywords": "state, framework, periodic, mode",
+  "description": "Framework for reasoning about embedded system modes and state",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/frankleonrose/Respire.git"
+  },
+  "authors":
+  [
+    {
+      "name": "Frank Leon Rose",
+      "email": "frankleonrose@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "dependencies":
+  [
+    {
+      "name": "Arduino Logging Library",
+      "version": "https://github.com/frankleonrose/Arduino-logging-library.git",
+      "authors": ["Bernd Klein <berndklein@gmx.de>", "Frank Leon Rose <frankleonrose@gmail.com>"]
+    }
+  ],
+  "export": {
+    "include":
+    [
+        "src/*",
+        "examples/*"
+    ]
+  },
+  "version": "0.1.0",
+  "frameworks": "arduino",
+  "platforms": "*"
+}
