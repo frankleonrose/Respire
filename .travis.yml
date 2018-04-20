@@ -1,0 +1,33 @@
+#
+# Template #2: The project is intended to by used as a library with examples
+#
+
+language: python
+python:
+    - "2.7"
+
+sudo: false
+cache:
+    directories:
+        - "~/.platformio"
+
+env:
+    - PLATFORMIO_CI_SRC=test/test_main.cpp
+    - PLATFORMIO_CI_SRC=examples/file.ino
+    - PLATFORMIO_CI_SRC=src/respire.cpp
+
+install:
+    - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
+
+script:
+    - echo "Run desktop (native) tests on Travis.CI Linux machine"
+    - platformio test -e native_test
+
+    # - echo "List remote devices"
+    # - platformio remote device list
+
+    # - echo "Run embedded test on remote devices"
+    # - platformio remote test -e uno -e nodemcu
+
+    # - platformio ci --lib="." --project-conf=platformio.ini
+    # - export PLATFORMIO_BUILD_FLAGS="-DNATIVE_PLATFORM"

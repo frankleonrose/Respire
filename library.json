@@ -1,7 +1,7 @@
 {
   "name": "Respire",
   "keywords": "state, framework, periodic, mode",
-  "description": "Framework for reasoning about embedded system modes and state",
+  "description": "Respire is a framework for reasoning about embedded system modes and state",
   "repository":
   {
     "type": "git",

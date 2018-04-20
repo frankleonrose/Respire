@@ -3,6 +3,8 @@
 #include <vector>
 #include <Logging.h>
 
+#include "respire.h"
+
 #define UNIT_TEST
 #ifdef UNIT_TEST
 
@@ -31,9 +33,11 @@ class TestClock : public Clock {
   }
 };
 
-class AppState {
-
-}
+class AppState : public RespireState<AppState> {
+  public:
+  virtual void onChange(const AppState &oldState, Executor<AppState> *executor) {}
+  virtual void dump(const Mode<AppState> &mainMode) const {}
+};
 
 #define FNAME(fn) {fn, #fn}
 static struct {
@@ -99,7 +103,7 @@ class TestExecutor : public Executor<AppState> {
 void test_storing_last_trigger(void) {
   TestClock clock;
   TestExecutor expectedOps(NULL);
-  Mode<AppState> ModePeriodic();
+  Mode<AppState> ModePeriodic(Mode<AppState>::Builder("periodic"));
   AppState state;
   RespireContext<AppState> respire(state, ModePeriodic, &clock, &expectedOps);
 
@@ -112,7 +116,7 @@ void test_storing_last_trigger(void) {
 void test_storing_cumulative_wait(void) {
   TestClock clock;
   TestExecutor expectedOps(NULL);
-  Mode<AppState> ModePeriodic();
+  Mode<AppState> ModePeriodic(Mode<AppState>::Builder("periodic"));
   AppState state;
   RespireContext<AppState> respire(state, ModePeriodic, &clock, &expectedOps);
 
