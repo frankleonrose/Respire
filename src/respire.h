@@ -56,22 +56,29 @@ typedef enum ActivationTag {
 class Clock {
   protected:
 
-  uint32_t _baseTime = 0;
-  uint32_t _baseMillis = 0;
+  uint32_t _rtcEpoch = 0;
+  uint32_t _rtcEpochMillis = 0;
 
   public:
 
-  Clock() {
-    _baseMillis = ::millis();
-  }
   virtual uint32_t millis() {
     return ::millis();
   }
-  virtual uint32_t currentTime(const uint32_t currentTime) {
-    uint32_t last = _baseTime;
-    _baseTime = currentTime;
-    _baseMillis = millis();
+
+  uint32_t epochRtc(const uint32_t rtc) {
+    uint32_t last = _rtcEpoch;
+    _rtcEpoch = rtc;
+    _rtcEpochMillis = millis();
     return last;
+  }
+
+  bool hasRtc() const {
+    return _rtcEpoch!=0;
+  }
+
+  uint32_t epochOfMillis(const uint32_t millis) const {
+    // Log.Debug("epochOfMillis: %d = %d @ %d\n", _rtcEpoch, _rtcEpochMillis, millis);
+    return _rtcEpoch + (millis - _rtcEpochMillis) / 1000;
   }
 };
 
@@ -429,8 +436,8 @@ class Mode {
     if (_invokeFunction!=NULL) Log.Debug_(" [%11s],", ms._invocationActive ? "Running" : "Not running");
     if (_invokeDelay!=0) Log.Debug_(" invokeDelay: %d,", (int)_invokeDelay);
     if (_invokeDelay!=0 && ms._invocationActive)  Log.Debug_(" lastTrigger: %lu,", (long unsigned int)ms._lastTriggerMillis);
-    if (_perUnit != TimeUnitNone || _minGapDuration!=0) Log.Debug(" tagLT=%s", _lastTriggerName);
-    if (_accumulateWait) Log.Debug(" tagCW=%s", _waitName);
+    if (_perUnit != TimeUnitNone || _minGapDuration!=0) Log.Debug_(" tagLT=%s", _lastTriggerName);
+    if (_accumulateWait) Log.Debug_(" tagCW=%s %d", _waitName, _waitCumulative);
     Log.Debug_("\n");
 
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
@@ -438,12 +445,7 @@ class Mode {
     }
   }
 
-
-  void checkpoint(const TAppState &state, RespireStore &store);
-
-  private:
-
-  void checkpointSub(const TAppState &state, RespireStore &store);
+  void checkpoint(const TAppState &state, const Clock &clock, RespireStore &store);
 };
 
 /**
@@ -462,9 +464,6 @@ class RespireStateBase {
 
   uint8_t _modesCount = 0;
   ModeState _modeStates[25];
-
-  uint32_t _rtcEpoch = 0;
-  uint32_t _rtcEpochMillis = 0; // The millis at rtcEpoch
 
   public:
 
@@ -505,20 +504,6 @@ class RespireStateBase {
 
   uint32_t millis() const {
     return _millis;
-  }
-
-  void epochRtc(const uint32_t rtc) {
-    _rtcEpoch = rtc;
-    _rtcEpochMillis = millis();
-  }
-
-  bool hasRtc() const {
-    return _rtcEpoch!=0;
-  }
-
-  uint32_t epochOfMillis(const uint32_t millis) const {
-    Log.Debug("epochOfMillis: %d = %d @ %d\n", _rtcEpoch, _rtcEpochMillis, millis);
-    return _rtcEpoch + (millis - _rtcEpochMillis) / 1000;
   }
 };
 
@@ -618,7 +603,8 @@ class RespireContext {
 
     _modeMain.collect(_invokeModes, _timeDependentModes);
 
-    _clock->currentTime(realTimeEpoch);
+    _clock->epochRtc(realTimeEpoch);
+    _appState.millis(_clock->millis());
 
     _modeMain.attach(_appState, realTimeEpoch, store);
 
@@ -643,9 +629,7 @@ class RespireContext {
     resumeActions(reference);
   }
 
-  void checkpoint(const TAppState &state, RespireStore &store) {
-    _modeMain.checkpoint(state, store);
-  }
+  void checkpoint(const TAppState &state, RespireStore &store);
 
   void complete(Mode<TAppState> &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {
     // Log.Debug("----------- completed: %s [%s]\n", mode.name(), (mode.modeState(*this)._invocationActive ? "Running" : "Not running"));
@@ -706,6 +690,9 @@ class RespireContext {
     if (_holdLevel==0) {
       performActions(oldState);
     }
+    else {
+      Log.Debug("Holding actions\n");
+    }
 
     _appState.didUpdate(oldState, _modeMain, _holdLevel);
   }
@@ -725,7 +712,7 @@ class RespireContext {
         invoke = _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
       }
       if (invoke) {
-        // printf("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
+        // Log.Debug("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);
       }
     }

@@ -52,6 +52,7 @@ void Mode<TAppState>::attach(RespireStateBase &state, uint32_t nowEpoch, Respire
   ms._startMillis = 0;
   ms._invocationCount = 0;
   ms._lastTriggerMillis = 0;
+  _waitStart = state.millis();
   _waitCumulative = 0;
 
   if (store!=NULL && (_perUnit!=TimeUnitNone || _minGapDuration!=0)) {
@@ -59,16 +60,19 @@ void Mode<TAppState>::attach(RespireStateBase &state, uint32_t nowEpoch, Respire
     uint32_t lastTriggeredEpoch = 0;
     store->load(_lastTriggerName, &lastTriggeredEpoch);
     store->load(_waitName, &_waitCumulative);
+    // Log.Debug("Wait cumulative loaded: %d\n", _waitCumulative);
     if (nowEpoch==0 || lastTriggeredEpoch==0 || lastTriggeredEpoch > nowEpoch) {
       // No absolute time known. Therefore, assign random point in the past as the last time.
       // Push random time back by known cumulative wait time if that is available.
       // As long as wait time is stored periodically by called checkpoint(),
       // the periodic task will have an increased chance of running despite no fixed time reference.
       ms._lastTriggerMillis = state.millis() - 1000 * _waitCumulative - RANDOM(period());
+      // Log.Debug("set lastTrigger: %d from millis: %d, wait: %d, random period: %d\n", ms._lastTriggerMillis, state.millis(), _waitCumulative, RANDOM(period()));
     }
     else {
       // Compare current time to stored last triggered time.
       ms._lastTriggerMillis = state.millis() - 1000 * (nowEpoch - lastTriggeredEpoch);
+      // Log.Debug("set lastTrigger: %d from millis: %d, now: %d, last: %d\n", ms._lastTriggerMillis, state.millis(), nowEpoch, lastTriggeredEpoch);
     }
   }
 
@@ -130,7 +134,7 @@ bool Mode<TAppState>::triggered(const TAppState &state) const {
   if (p==0) {
     return false;
   }
-  // Log.Debug("Triggered values: last=%lu, period=%lu, current=%lu\n", _lastTriggerMillis, p, currentMillis);
+  // Log.Debug("Triggered values: last=%lu, period=%lu, current=%lu\n", modeState(state)._lastTriggerMillis, p, state.millis());
   bool triggered = (modeState(state)._lastTriggerMillis==0) || (modeState(state)._lastTriggerMillis + p) <= state.millis();
   return triggered;
 }
@@ -152,7 +156,7 @@ bool Mode<TAppState>::persistent(const TAppState &state) const {
     // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       Mode *mode = *m;
-      Log.Debug(" %s invocations=%d limit=%d\n", mode->name(), (int)mode->modeState(state)._invocationCount, (int)mode->_repeatLimit);
+      // Log.Debug(" %s invocations=%d limit=%d\n", mode->name(), (int)mode->modeState(state)._invocationCount, (int)mode->_repeatLimit);
       persist |= !mode->hitRepeatLimit(state);
     }
     // Log.Debug("Checking supply of children of %s [%s]\n", name(), persist ? "persisting" : "not persisting");
@@ -309,7 +313,7 @@ uint8_t Mode<TAppState>::decSupportiveParents(const TAppState &state) {
 
 template <class TAppState>
 bool Mode<TAppState>::propagateActive(const ActivationType parentActivation, const ActivationType myActivation, TAppState &state, const TAppState &oldState) {
-
+  // Log.Debug("propagateActive[%s]: parentActivation: %d, myActivation: %d\n", name(), parentActivation, myActivation);
   bool barren = true;
 
   int limit = INT_MAX;
@@ -468,27 +472,27 @@ bool Mode<TAppState>::propagate(const ActivationType parentActivation, TAppState
 }
 
 template <class TAppState>
-void Mode<TAppState>::checkpoint(const TAppState &state, RespireStore &store) {
+void RespireContext<TAppState>::checkpoint(const TAppState &state, RespireStore &store) {
   store.beginTransaction();
-  checkpointSub(state, store);
+  _modeMain.checkpoint(state, *_clock, store);
   store.endTransaction();
 }
 
 template <class TAppState>
-void Mode<TAppState>::checkpointSub(const TAppState &state, RespireStore &store) {
+void Mode<TAppState>::checkpoint(const TAppState &state, const Clock &clock, RespireStore &store) {
   if (_accumulateWait) {
     uint32_t nowMillis = state.millis();
     _waitCumulative += (nowMillis - _waitStart) / 1000; // Convert ms to seconds
     _waitStart = nowMillis;
     store.store(_waitName, _waitCumulative);
   }
-  if (_storeLastTrigger && modeState(state)._lastTriggerMillis && state.hasRtc()) {
-    uint32_t lastTriggeredEpoch = state.epochOfMillis(modeState(state)._lastTriggerMillis);
+  if (_storeLastTrigger && modeState(state)._lastTriggerMillis && clock.hasRtc()) {
+    uint32_t lastTriggeredEpoch = clock.epochOfMillis(modeState(state)._lastTriggerMillis);
     store.store(_lastTriggerName, lastTriggeredEpoch);
   }
 
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
-    (*m)->checkpointSub(state, store);
+    (*m)->checkpoint(state, clock, store);
   }
 }
 

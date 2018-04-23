@@ -42,11 +42,15 @@ class AppState : public RespireState<AppState> {
   virtual void dump(const Mode<AppState> &mainMode) const {}
 };
 
+void testFunction(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
+}
+
 #define FNAME(fn) {fn, #fn}
 static struct {
   Mode<AppState>::ActionFn fn;
   const char *name;
 } _names[] = {
+  FNAME(testFunction),
 };
 
 class TestExecutor : public Executor<AppState> {
@@ -103,9 +107,6 @@ class TestExecutor : public Executor<AppState> {
   }
 };
 
-void testFunction(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
-}
-
 class TestStore : public RespireStore {
   std::map<std::string, uint32_t> _intMap;
 
@@ -115,7 +116,12 @@ class TestStore : public RespireStore {
     return false;
   }
   virtual bool load(const char *name, uint32_t *value) {
-    return false;
+    if (_intMap.find(std::string(name))==_intMap.end()) {
+      return false;
+    }
+    *value = _intMap.at(std::string(name));
+    Log.Debug("load \"%8s\": %d\n", name, *value);
+    return true;
   }
 
   virtual bool store(const char *name, const uint8_t *bytes, const uint16_t size) {
@@ -149,7 +155,7 @@ void test_storing_last_trigger(void) {
   respire.init();
   respire.begin();
 
-  state.epochRtc(500000000);
+  clock.epochRtc(500000000);
 
   for (int i=0; i<90; ++i) {
     clock.advanceSeconds(1);
@@ -185,7 +191,7 @@ void test_storing_cumulative_wait(void) {
   respire.init();
   respire.begin();
 
-  state.epochRtc(500000000);
+  clock.epochRtc(500000000);
 
   for (int i=0; i<90; ++i) {
     clock.advanceSeconds(1);
@@ -205,6 +211,84 @@ void test_storing_cumulative_wait(void) {
   TEST_ASSERT(store.confirm("RmytagCW", 15));
 }
 
+void test_restoring_cumulative_wait(void) {
+  TestStore store;
+  TestClock clock;
+  TestExecutor expectedOps(testFunction, testFunction, NULL);
+  Mode<AppState> ModeFunction(Mode<AppState>::Builder("function")
+    .invokeFn(testFunction));
+  Mode<AppState> ModePeriodic(Mode<AppState>::Builder("periodic")
+    .storageTag("mytag")
+    .periodic(60, TimeUnitHour)
+    .addChild(&ModeFunction));
+  AppState state;
+  RespireContext<AppState> respire(state, ModePeriodic, &clock, &expectedOps);
+
+  respire.init();
+  respire.begin();
+
+  clock.epochRtc(500000000);
+
+  for (int i=0; i<75; ++i) {
+    clock.advanceSeconds(1);
+    respire.loop();
+    if (ModeFunction.isActive(state)) {
+      respire.complete(ModeFunction);
+    }
+  }
+  TEST_ASSERT(expectedOps.check());
+  respire.checkpoint(state, store);
+
+  TEST_ASSERT(store.confirm("RmytagCW", 15));
+
+  for (int i=0; i<45; ++i) {
+    clock.advanceSeconds(1);
+    respire.loop();
+    if (ModeFunction.isActive(state)) {
+      respire.complete(ModeFunction);
+    }
+  }
+  // Don't checkpoint, so CW is still 15
+
+  TestExecutor expectedNoOps(NULL);
+  RespireContext<AppState> restored(state, ModePeriodic, &clock, &expectedNoOps);
+
+  restored.init(0, &store);
+  restored.begin();
+  // ModePeriodic.dump(state);
+
+  // random(period = 60000) returns 30000ms in test, so we know next trigger is 15 seconds from now
+  for (int i=0; i<10; ++i) {
+    clock.advanceSeconds(1);
+    restored.loop();
+    if (ModeFunction.isActive(state)) {
+      restored.complete(ModeFunction);
+    }
+  }
+  TEST_ASSERT(expectedNoOps.check());
+  restored.checkpoint(state, store);
+
+  TEST_ASSERT(store.confirm("RmytagCW", 25));
+
+  TestExecutor expectedOneOps(testFunction, NULL);
+  restored.setExecutor(&expectedOneOps);
+
+  Log.Debug("Expecting to trigger testFunction\n");
+
+  for (int i=0; i<10; ++i) {
+    clock.advanceSeconds(1);
+    restored.loop();
+    if (ModeFunction.isActive(state)) {
+      restored.complete(ModeFunction);
+    }
+    // ModePeriodic.dump(state);
+  }
+  TEST_ASSERT(expectedOneOps.check());
+  restored.checkpoint(state, store);
+
+  TEST_ASSERT(store.confirm("RmytagCW", 5));
+}
+
 int main(int argc, char **argv) {
     UNITY_BEGIN();
     LogPrinter printer(printFn);
@@ -212,6 +296,7 @@ int main(int argc, char **argv) {
 
     RUN_TEST(test_storing_last_trigger);
     RUN_TEST(test_storing_cumulative_wait);
+    RUN_TEST(test_restoring_cumulative_wait);
     UNITY_END();
 
     return 0;
