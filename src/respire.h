@@ -78,8 +78,8 @@ class Clock {
 class RespireStore {
   public:
 
-  virtual void beginTransaction();
-  virtual void endTransaction();
+  virtual void beginTransaction() {}
+  virtual void endTransaction() {}
 
   virtual bool load(const char *name, uint8_t *bytes, const uint16_t size) = 0;
   virtual bool load(const char *name, uint32_t *value) = 0;
@@ -284,6 +284,7 @@ class Mode {
   uint32_t _supportiveFrame = 0; // changeCounter value corresponding to current supportiveParents value. Alternative is to initialize _supportiveParents = _countParents before propagation.
 
   char _lastTriggerName[10]; // Name by which Last Trigger value is recovered from storage
+  bool _storeLastTrigger = false;
   bool _accumulateWait = false;
   uint32_t _waitCumulative = 0;
   uint32_t _waitStart = 0;
@@ -437,21 +438,12 @@ class Mode {
     }
   }
 
-  void checkpoint(TAppState &state, RespireStore &store);
+
+  void checkpoint(const TAppState &state, RespireStore &store);
 
   private:
 
-  void checkpoint(uint32_t now, RespireStore &store) {
-    if (_accumulateWait) {
-      _waitCumulative += (now - _waitStart) / 1000; // Convert ms to seconds
-      _waitStart = now;
-      store.store(_waitName, _waitCumulative);
-    }
-
-    for (auto m = _children.begin(); m!=_children.end(); ++m) {
-      (*m)->checkpoint(now, store);
-    }
-  }
+  void checkpointSub(const TAppState &state, RespireStore &store);
 };
 
 /**
@@ -470,6 +462,9 @@ class RespireStateBase {
 
   uint8_t _modesCount = 0;
   ModeState _modeStates[25];
+
+  uint32_t _rtcEpoch = 0;
+  uint32_t _rtcEpochMillis = 0; // The millis at rtcEpoch
 
   public:
 
@@ -510,6 +505,20 @@ class RespireStateBase {
 
   uint32_t millis() const {
     return _millis;
+  }
+
+  void epochRtc(const uint32_t rtc) {
+    _rtcEpoch = rtc;
+    _rtcEpochMillis = millis();
+  }
+
+  bool hasRtc() const {
+    return _rtcEpoch!=0;
+  }
+
+  uint32_t epochOfMillis(const uint32_t millis) const {
+    Log.Debug("epochOfMillis: %d = %d @ %d\n", _rtcEpoch, _rtcEpochMillis, millis);
+    return _rtcEpoch + (millis - _rtcEpochMillis) / 1000;
   }
 };
 
@@ -632,6 +641,10 @@ class RespireContext {
     RS_ASSERT(_initialized);
     TAppState reference;
     resumeActions(reference);
+  }
+
+  void checkpoint(const TAppState &state, RespireStore &store) {
+    _modeMain.checkpoint(state, store);
   }
 
   void complete(Mode<TAppState> &mode, const std::function< void(TAppState&) > &updateFn = [](TAppState&) {}) {

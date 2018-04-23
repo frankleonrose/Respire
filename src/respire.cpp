@@ -31,6 +31,7 @@ Mode<TAppState>::Mode(const Builder &builder)
 {
   // Don't do anything with referred Modes (children, etc) here because they may not yet be initialized.
   builder.lastTriggerName(_lastTriggerName, sizeof(_lastTriggerName));
+  _storeLastTrigger = strlen(_lastTriggerName)==8;
   builder.waitName(_waitName, sizeof(_waitName));
   _accumulateWait = strlen(_waitName)==8; // Has a valid waitName
 }
@@ -467,10 +468,28 @@ bool Mode<TAppState>::propagate(const ActivationType parentActivation, TAppState
 }
 
 template <class TAppState>
-void Mode<TAppState>::checkpoint(TAppState &state, RespireStore &store) {
+void Mode<TAppState>::checkpoint(const TAppState &state, RespireStore &store) {
   store.beginTransaction();
-  checkpoint(state.millis(), store);
+  checkpointSub(state, store);
   store.endTransaction();
+}
+
+template <class TAppState>
+void Mode<TAppState>::checkpointSub(const TAppState &state, RespireStore &store) {
+  if (_accumulateWait) {
+    uint32_t nowMillis = state.millis();
+    _waitCumulative += (nowMillis - _waitStart) / 1000; // Convert ms to seconds
+    _waitStart = nowMillis;
+    store.store(_waitName, _waitCumulative);
+  }
+  if (_storeLastTrigger && modeState(state)._lastTriggerMillis && state.hasRtc()) {
+    uint32_t lastTriggeredEpoch = state.epochOfMillis(modeState(state)._lastTriggerMillis);
+    store.store(_lastTriggerName, lastTriggeredEpoch);
+  }
+
+  for (auto m = _children.begin(); m!=_children.end(); ++m) {
+    (*m)->checkpointSub(state, store);
+  }
 }
 
 template <class TAppState>
