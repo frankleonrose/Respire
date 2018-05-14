@@ -272,11 +272,14 @@ bool Mode<TAppState>::activate(TAppState &state) {
   }
   modeState(state)._startIndex = state.changeCounter();
   modeState(state)._startMillis = state.millis();
-  modeState(state)._invocationCount++;
   modeState(state)._childInspirationCount = 0;
   if (_invokeFunction!=NULL) {
     modeState(state)._invocationActive = true;
     modeState(state)._lastTriggerMillis = 0;
+  }
+  else {
+    // If we have invocation function, we increment invocation count only when it actually runs.
+    modeState(state)._invocationCount++;
   }
   // Log.Debug("Done %u\n", modeState(state)._invocationCount);
   return true;

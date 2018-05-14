@@ -712,6 +712,7 @@ class RespireContext {
         invoke = _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
       }
       if (invoke) {
+        mode->modeState(_appState)._invocationCount++;
         // Log.Debug("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);
       }
