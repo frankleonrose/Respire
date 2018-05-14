@@ -31,9 +31,9 @@ TODO
 
 class RespireStateBase;
 
-#define MINUTES_IN_MILLIS(x) ((x) * 60 * 1000)
-#define HOURS_IN_MILLIS(x) ((x) * 60 * MINUTES_IN_MILLIS(1))
-#define DAYS_IN_MILLIS(x) ((x) * 24 * HOURS_IN_MILLIS(1))
+#define MINUTES_IN_MILLIS(x) ((unsigned)(x) * 60 * 1000)
+#define HOURS_IN_MILLIS(x) ((unsigned)(x) * 60 * MINUTES_IN_MILLIS(1))
+#define DAYS_IN_MILLIS(x) ((unsigned)(x) * 24 * HOURS_IN_MILLIS(1))
 
 typedef enum TimeUnit {
   TimeUnitNone,
