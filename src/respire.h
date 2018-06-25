@@ -199,7 +199,9 @@ class Mode {
       return *this;
     }
     Builder &idleMode(Mode<TAppState> *idleMode) {
+      RS_ASSERT(idleMode!=NULL);
       _idleMode = idleMode;
+      // _children.push_back(idleMode);
       return *this;
     }
     Builder &followMode(Mode<TAppState> *followMode) {
@@ -347,6 +349,17 @@ class Mode {
     for (auto m = _children.begin(); m!=_children.end(); ++m) {
       (*m)->collect(invokeModes, timeDependentModes);
     }
+  }
+
+  typedef std::function< bool(const Mode<TAppState>&) > VisitFn;
+  bool visit(VisitFn fn) {
+    bool proceed = fn(*this);
+    if (proceed) {
+      for (auto m = _children.begin(); m!=_children.end(); ++m) {
+        (*m)->visit(fn);
+      }
+    }
+    return proceed;
   }
 
   bool requiredState(const TAppState &state) const {
@@ -661,22 +674,44 @@ class RespireContext {
   }
 
   bool checkTimeTriggers() const {
-    bool changed = false;
-
     for (auto m = _timeDependentModes.begin(); m!=_timeDependentModes.end(); ++m) {
       // Log.Debug("%s expired=%T or triggered=%T\n", (*m)->name(), (*m)->expired(_appState), (*m)->triggered(_appState));
-      changed |= (*m)->expired(_appState);
-      changed |= (*m)->triggered(_appState);
+      if ((*m)->expired(_appState) || (*m)->triggered(_appState)) {
+        return true; // Yep, something changed. Don't bother checking anything further.
+      }
     }
 
-    return changed;
+    return false;
+  }
+
+  bool possibleIdleInvocation() const {
+    bool possible = false;
+    const TAppState &state = _appState;
+    _modeMain.visit([&state, &possible](const Mode<TAppState> &mode) -> bool {
+      // Log.Debug("visiting %s\n", mode.name());
+      if (mode._idleMode!=NULL) {
+        ModeState ms = mode.modeState(state);
+        bool canInspireChild = mode._childActivationLimit==0 || mode._childActivationLimit > ms._childInspirationCount;
+
+        const Mode<TAppState> &idle = *mode._idleMode;
+        const ModeState & is = idle.modeState(state);
+        bool idleInactive = !idle.isActive(state);
+        bool idleInspirable = idle._repeatLimit==0 || idle._repeatLimit > is._invocationCount;
+
+        Log.Debug("%s canInspireChild=%T idleInactive=%T idleInspirable=%T\n", mode.name(), canInspireChild, idleInactive, idleInspirable);
+        possible |= canInspireChild && idleInactive && idleInspirable;
+      }
+      return !possible; // short circuit exit
+    });
+
+    return possible;
   }
 
   void loop() {
     // Update the time so that periodic checks work.
     _appState.millis(_clock->millis());
 
-    if (checkTimeTriggers()) {
+    if (checkTimeTriggers() || possibleIdleInvocation()) {
       TAppState oldState(_appState); // TODO: Why do we need this?
       onUpdate(oldState); // The only thing that changed was millis. Don't bother making a copy of state for comparison.
     }

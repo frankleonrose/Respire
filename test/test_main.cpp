@@ -172,6 +172,47 @@ void test_state_copy_ctor(void) {
   TEST_ASSERT_EQUAL(state.valueBool(), newState.valueBool());
 }
 
+void test_parent_terminated_when_limited_idle(void) {
+  TestStore store;
+  TestClock clock;
+  TestExecutor expectedOps(testFunction, NULL);
+  Mode<AppState> ModeIdle(Mode<AppState>::Builder("idle")
+    .invokeFn(testFunction)
+    .repeatLimit(2));
+  Mode<AppState> ModeTerminated(Mode<AppState>::Builder("to be terminated")
+    .addChild(&ModeIdle)
+    .idleMode(&ModeIdle));
+  Mode<AppState> ModeRoot(Mode<AppState>::Builder("root")
+    .addChild(&ModeTerminated));
+  AppState state;
+  RespireContext<AppState> respire(state, ModeRoot, &clock, &expectedOps);
+
+  respire.init();
+  respire.begin();
+  ModeRoot.dump(state);
+
+  clock.epochRtc(500000000);
+
+  clock.advanceSeconds(1);
+  respire.loop();
+  TEST_ASSERT(expectedOps.check());
+
+  respire.complete(&ModeIdle); // Indicate invoked function has completed
+
+  TestExecutor expectedOneOps(testFunction, NULL);
+  respire.setExecutor(&expectedOneOps);
+
+  clock.advanceSeconds(1);
+  respire.loop();
+
+  TEST_ASSERT(expectedOneOps.check()); // Nothing more should have happened
+
+  respire.complete(&ModeIdle); // Indicate invoked function has completed
+
+  TEST_ASSERT_FALSE(ModeTerminated.isActive(state));
+  TEST_ASSERT_FALSE(ModeIdle.isActive(state));
+}
+
 void test_storing_last_trigger(void) {
   TestStore store;
   TestClock clock;
@@ -328,6 +369,8 @@ int main(int argc, char **argv) {
     Log.Init(LOGLEVEL, printer);
 
     RUN_TEST(test_state_copy_ctor);
+
+    RUN_TEST(test_parent_terminated_when_limited_idle);
 
     RUN_TEST(test_storing_last_trigger);
     RUN_TEST(test_storing_cumulative_wait);

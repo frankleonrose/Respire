@@ -341,9 +341,12 @@ bool Mode<TAppState>::propagateActive(const ActivationType parentActivation, con
   bool skippedIdleCell = false;
   for (auto m = _children.begin(); m!=_children.end(); ++m) {
     auto mode = *m;
-    if (_idleMode!=mode || childActivation==ActivationSustaining) {
+    if (_idleMode!=mode ||
+        childActivation==ActivationSustaining || // Can't inspire any more children, handle idle same as others
+        _idleMode->hitRepeatLimit(state)) {      // Idle can't be inspired, handle like others
       bool oldActive = mode->isActive(state);
       bool active = mode->propagate(childActivation, state, oldState);
+      // Log.Debug("%s child of %s %s now active\n", mode->name(), name(), (active ? "is" : "is not"));
       barren &= !active;
 
       if (!oldActive && active) {
@@ -356,7 +359,7 @@ bool Mode<TAppState>::propagateActive(const ActivationType parentActivation, con
           childActivation = ActivationSustaining;
           if (skippedIdleCell) {
             // Now that we're in sustaining mode, propagate to _idleMode that we skipped.
-            bool active = mode->propagate(childActivation, state, oldState);
+            bool active = _idleMode->propagate(childActivation, state, oldState);
             barren &= !active;
             skippedIdleCell = false;
           }
@@ -364,23 +367,25 @@ bool Mode<TAppState>::propagateActive(const ActivationType parentActivation, con
       }
     }
     else {
-      skippedIdleCell |= _idleMode==mode;
+      skippedIdleCell = true;
     }
   }
 
-  if (!_children.empty() && remaining==0 && barren && !persistent(state)) {
-    RS_ASSERT(limit==0); // If remaining is 0, limit must be, too.
+  if (!_children.empty() &&
+      barren &&
+      (remaining==0 || (_idleMode!=NULL && _idleMode->hitRepeatLimit(state))) &&
+      !persistent(state)) {
+    RS_ASSERT(remaining!=0 || limit==0); // If remaining is 0, limit must be, too.
     RS_ASSERT(!skippedIdleCell); // If limit is 0, logic above will have propagated to idleCell
-    RS_ASSERT(childActivation==ActivationSustaining);
     Log.Debug("Terminating for barren and no capacity to inspire children: %s\n", name());
     terminate(state);
   }
   else if (childActivation!=ActivationSustaining) {
     if (_idleMode!=NULL) {
-      RS_ASSERT(skippedIdleCell);
       // We have idle cell. Actively inspire it if barren or kill it if not barren.
       if (barren) {
-        if (limit>0) {
+        if (limit>0 && !_idleMode->hitRepeatLimit(state)) {
+          RS_ASSERT(skippedIdleCell);
           Log.Debug("Activating idle: %s\n", _idleMode->name());
           bool active = _idleMode->propagate(ActivationIdleCell, state, oldState);
           if (active) {
@@ -444,6 +449,9 @@ bool Mode<TAppState>::propagate(const ActivationType parentActivation, TAppState
         // Don't propagate until all parent statuses are determined.
         return false; // Parent is dead/dying, so it won't be doing any barren logic.
       }
+    }
+    else {
+      Log.Debug("Remaining active '%s' with supportive parent\n", name());
     }
   }
   else {
