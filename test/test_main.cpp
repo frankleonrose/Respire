@@ -37,9 +37,32 @@ class TestClock : public Clock {
 };
 
 class AppState : public RespireState<AppState> {
+  bool value_bool = true;
+  int  value_int = 0;
+
   public:
   virtual void onChange(const AppState &oldState, Executor<AppState> *executor) {}
   virtual void dump(const Mode<AppState> &mainMode) const {}
+
+  int valueInt() {
+    return value_int;
+  }
+
+  void valueInt(int v) {
+    AppState oldState(*this);
+    value_int = v;
+    onUpdate(oldState);
+  }
+
+  bool valueBool() {
+    return value_bool;
+  }
+
+  void valueBool(bool v) {
+    AppState oldState(*this);
+    value_bool = v;
+    onUpdate(oldState);
+  }
 };
 
 void testFunction(const AppState &state, const AppState &oldState, Mode<AppState> *triggeringMode) {
@@ -138,6 +161,16 @@ class TestStore : public RespireStore {
     return _intMap.at(std::string(name)) == value;
   }
 };
+
+void test_state_copy_ctor(void) {
+  AppState state;
+  state.valueInt(5);
+  state.valueBool(true);
+
+  AppState newState(state);
+  TEST_ASSERT_EQUAL(state.valueInt(), newState.valueInt());
+  TEST_ASSERT_EQUAL(state.valueBool(), newState.valueBool());
+}
 
 void test_storing_last_trigger(void) {
   TestStore store;
@@ -293,6 +326,8 @@ int main(int argc, char **argv) {
     UNITY_BEGIN();
     LogPrinter printer(printFn);
     Log.Init(LOGLEVEL, printer);
+
+    RUN_TEST(test_state_copy_ctor);
 
     RUN_TEST(test_storing_last_trigger);
     RUN_TEST(test_storing_cumulative_wait);
