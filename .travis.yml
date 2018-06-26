@@ -13,15 +13,15 @@ cache:
 
 env:
     - PLATFORMIO_CI_SRC=test/test_main.cpp
-    - PLATFORMIO_CI_SRC=examples/file.ino
-    - PLATFORMIO_CI_SRC=src/respire.cpp
+    # - PLATFORMIO_CI_SRC=examples/file.ino
+    # - PLATFORMIO_CI_SRC=src/respire.cpp
 
 install:
     - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
 
 script:
     - echo "Run desktop (native) tests on Travis.CI Linux machine"
-    - platformio test -e native_test
+    - platformio test --verbose --environment native_test
 
     # - echo "List remote devices"
     # - platformio remote device list
