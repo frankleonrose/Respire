@@ -17,7 +17,8 @@ env:
     # - PLATFORMIO_CI_SRC=src/respire.cpp
 
 install:
-    - pip install -U https://github.com/platformio/platformio-core/archive/develop.zip
+    - pip install -U platformio
+    - platformio update
 
 script:
     - echo "Run desktop (native) tests on Travis.CI Linux machine"
