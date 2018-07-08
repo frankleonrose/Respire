@@ -527,7 +527,7 @@ template <class TAppState> class RespireState : public RespireStateBase {
   typedef std::function< void(const TAppState&, const TAppState&)> ListenerFn;
 
   private:
-  RespireContext<TAppState> *_context;
+  RespireContext<TAppState> *_context = NULL;
   ListenerFn _listener;
 
   public:
@@ -573,8 +573,8 @@ class RespireContext {
   TAppState &_appState;
   Mode<TAppState> &_modeMain;
 
-  Clock *_clock;
-  Executor<TAppState> *_executor;
+  Clock *_clock = NULL;
+  Executor<TAppState> *_executor = NULL;
   bool _initialized = false;
   uint16_t _holdLevel = 0;
 
