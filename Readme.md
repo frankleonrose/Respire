@@ -32,6 +32,7 @@ Modes are the units of behavior in Respire.
     - The parent was just inspired
     - The parent which is periodic was just triggered
     - The mode's inspiration predicate is true
+    - The mode's required predicate just switched from false to true
     - The mode's predecessor just expired
     - The mode is the parent's idle mode and all its peers are inactive
 - Modes expire when and one or more of the following is true:
@@ -60,9 +61,9 @@ Every Mode has a set of properties that define its behavior in a system.
 - **storageTag**: The name used to distinguish the mode when storing parameter values. Currently max 5 characters so that a field name of 8 characters can be constructed of the form: RM----F- (R is the Respire prefix, M---- is the storage tag, and F- is the field tag.)
 
 #### Relationships
+- **children**: Modes contain child modes. The result is a directed acyclic graph growing from a single root mode. (Since modes can be shared by multiple parents, it is *not* a tree.)
 - **idleMode**: When all other children of a mode are inactive, this mode is inspired. It is terminated when any one of its siblings is activated. An example would be to activate a sleep function. When nothing else is happening, the system should go to sleep.
 - **followMode**: The current mode will be inspired when the mode it is following expires. This is how sequences are constructed.
-- **children**: Modes contain child modes. The result is a directed acyclic graph growing from a single root mode. (Since modes can be shared by multiple parents, it is *not* a tree.)
 
 ### Naming
 I couldn't think of a better lung or breathing related term than "Mode". Is there one? "Gasps"? "Alveoli"? Suggestions welcome.
@@ -79,6 +80,8 @@ So much to do. Respire is an experiment and there are so many things that need t
 - Parallel `Mode`s - Each mode can have a parallel limit saying how many of it can be active at one time.
 - `Mode` implied state. Specifying dependent state for a Mode should be easier. For example, if you want a `flag` to be set when either `Mode A` or `Mode B` is active, there should be a way to express that `Mode A` implies `flag`.
 - Prefabricated input/output adapters. Tying, for instance, a boolean in state to an output pin should be less than a line.
+- One-shot invocations - (Test) Modes that exist to invocation a function, periodically for instance, should not require a minimum active time in order to be successfully inspired.
+- Mixed Invocations with Children - (Test) It appears that a mode with function attached does not also inspire children.
 - Multi-threaded operation. We have plenty of multi-core µcus and Respire has something to offer in terms of coordinating them and making optimal use of the resources available.
 - Code generation. I'd like to make the expression of Modes more concise and then generate whatever language structure is necessary for a particular target.
 
