@@ -746,7 +746,7 @@ class RespireContext {
         // triggered() checks for delay passed and propagate sets lastTriggerMillis to current when triggered.
         invoke = _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
       }
-      if (invoke) {
+      if (invoke && !mode->hitRepeatLimit(_appState)) {
         mode->modeState(_appState)._invocationCount++;
         // Log.Debug("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);
