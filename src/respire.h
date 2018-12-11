@@ -737,16 +737,16 @@ class RespireContext {
 
     for (auto m = _invokeModes.begin(); m!=_invokeModes.end(); ++m) {
       auto mode = *m;
-      bool invoke = false;
+      bool invoke = mode->isActive(_appState);
       if (mode->invokeDelay()==0) {
-        // Just inspired. Invoke immediately.
-        invoke = mode->isActive(_appState) && !mode->isActive(oldState);
+        // Just inspired and no delay? Invoke immediately.
+        invoke = invoke && !mode->isActive(oldState);
       }
       else {
         // triggered() checks for delay passed and propagate sets lastTriggerMillis to current when triggered.
-        invoke = _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
+        invoke = invoke && _appState.millis()==mode->modeState(_appState)._lastTriggerMillis;
       }
-      if (invoke && !mode->hitRepeatLimit(_appState)) {
+      if (invoke) {
         mode->modeState(_appState)._invocationCount++;
         // Log.Debug("Invoke: %s %p\n", mode->name(), mode->invokeFunction());
         _executor->exec(mode->invokeFunction(), _appState, oldState, mode);

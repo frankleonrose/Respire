@@ -127,8 +127,8 @@ bool Mode<TAppState>::triggered(const TAppState &state) const {
     return false;
   }
   if (_invokeDelay) {
-    // Log.Debug("InvokeDelay triggers %T\n", (modeState(state)._startMillis + _invokeDelay) <= state.millis());
-    return (modeState(state)._startMillis + _invokeDelay) <= state.millis();
+    // Log.Debug("InvokeDelay triggers %T\n", (modeState(state)._lastTriggerMillis==0) && (modeState(state)._startMillis + _invokeDelay) <= state.millis());
+    return (modeState(state)._lastTriggerMillis==0) && (modeState(state)._startMillis + _invokeDelay) <= state.millis();
   }
   uint32_t p = period();
   if (p==0) {

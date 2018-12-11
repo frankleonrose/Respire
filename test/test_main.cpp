@@ -15,14 +15,6 @@ void printFn(const char c) {
   printf("%c", c);
 }
 
-// void setUp(void) {
-// // set stuff up here
-// }
-
-// void tearDown(void) {
-// // clean stuff up here
-// }
-
 class TestClock : public Clock {
   uint32_t _millis = 100000;
 
@@ -195,6 +187,7 @@ void test_parent_terminated_when_limited_idle(void) {
 
   clock.advanceSeconds(1);
   respire.loop();
+  ModeRoot.dump(state);
   TEST_ASSERT(expectedOps.check());
 
   respire.complete(&ModeIdle); // Indicate invoked function has completed
@@ -204,13 +197,66 @@ void test_parent_terminated_when_limited_idle(void) {
 
   clock.advanceSeconds(1);
   respire.loop();
+  ModeRoot.dump(state);
 
   TEST_ASSERT(expectedOneOps.check()); // Nothing more should have happened
 
   respire.complete(&ModeIdle); // Indicate invoked function has completed
+  ModeRoot.dump(state);
 
   TEST_ASSERT_FALSE(ModeTerminated.isActive(state));
   TEST_ASSERT_FALSE(ModeIdle.isActive(state));
+}
+
+void test_abide_by_invocation_delay_on_idle() {
+  TestStore store;
+  TestClock clock;
+  TestExecutor expectedOps(testFunction, NULL);
+  Mode<AppState> ModeIdle(Mode<AppState>::Builder("idle")
+    .invokeFn(testFunction)
+    .invokeDelay(5 * 1000)
+    .repeatLimit(2));
+  Mode<AppState> ModeRoot(Mode<AppState>::Builder("root")
+    .addChild(&ModeIdle)
+    .idleMode(&ModeIdle));
+  AppState state;
+  RespireContext<AppState> respire(state, ModeRoot, &clock, &expectedOps);
+
+  clock.epochRtc(500000000);
+  respire.init();
+  respire.begin();
+  ModeRoot.dump(state);
+
+  for (int i=0; i<10; ++i) {
+    clock.advanceSeconds(6);
+    ModeRoot.dump(state);
+    respire.loop();
+    ModeRoot.dump(state);
+  }
+  TEST_ASSERT(expectedOps.check());
+
+  TestExecutor expectedOneOps(testFunction, NULL);
+  respire.setExecutor(&expectedOneOps);
+
+  respire.complete(&ModeIdle);
+  ModeRoot.dump(state);
+  clock.advanceSeconds(11);
+  respire.loop();
+  clock.advanceSeconds(11);
+  respire.loop();
+  ModeRoot.dump(state);
+  TEST_ASSERT(expectedOneOps.check());
+
+  TestExecutor expectedNoOps(NULL);
+  respire.setExecutor(&expectedNoOps);
+
+  respire.complete(&ModeIdle);
+  clock.advanceSeconds(11);
+  respire.loop();
+  ModeRoot.dump(state);
+  TEST_ASSERT(expectedNoOps.check());
+
+  TEST_ASSERT_FALSE(ModeIdle.isActive(state)); // Idle still activated, though invocation limited
 }
 
 void test_storing_last_trigger(void) {
@@ -371,6 +417,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_state_copy_ctor);
 
     RUN_TEST(test_parent_terminated_when_limited_idle);
+    RUN_TEST(test_abide_by_invocation_delay_on_idle);
 
     RUN_TEST(test_storing_last_trigger);
     RUN_TEST(test_storing_cumulative_wait);
