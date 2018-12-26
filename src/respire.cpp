@@ -4,7 +4,7 @@
 #include <Logging.h>
 #include "respire.h"
 
-#if UNIT_TEST
+#if PLATFORM_NATIVE
 #define RANDOM nativeRandom
 #else
 #define RANDOM random
